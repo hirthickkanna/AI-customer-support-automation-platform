@@ -9,30 +9,33 @@ from sqlalchemy.orm import Session
 from app.models import KnowledgeArticle
 from app.core.config import settings
 
-GEMINI_API_KEY = settings.GEMINI_API_KEY
-GEMINI_MODEL = "gemini-2.0-flash"
+OPENROUTER_API_KEY = settings.OPENROUTER_API_KEY
+OPENROUTER_MODEL = settings.OPENROUTER_MODEL
+OPENROUTER_EMBEDDING_MODEL = settings.OPENROUTER_EMBEDDING_MODEL
 
 RATE_LIMIT_MESSAGE = (
-    "The AI service is temporarily unavailable — the Gemini API quota has been exceeded "
-    "(429 Too Many Requests). Please wait a few minutes and try again, or check your "
-    "API key quota in Google AI Studio."
+    "The AI service is temporarily unavailable — the OpenRouter API quota has been exceeded "
+    "(429 Too Many Requests). Please wait a few minutes and try again."
 )
 
 
-def _is_gemini_rate_limited(error: Exception) -> bool:
+def _is_rate_limited(error: Exception) -> bool:
     if isinstance(error, urllib.error.HTTPError) and error.code == 429:
         return True
     return "429" in str(error)
 
 
 def get_text_embedding(text_query: str) -> List[float]:
-    """Generate 1536-dimensional vector embedding using Gemini API."""
-    if GEMINI_API_KEY and GEMINI_API_KEY != "mock-key-if-no-env-present":
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key={GEMINI_API_KEY}"
-        headers = {"Content-Type": "application/json"}
+    """Generate 1536-dimensional vector embedding using OpenRouter API."""
+    if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "mock-key-if-no-env-present":
+        url = "https://openrouter.ai/api/v1/embeddings"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}"
+        }
         body = {
-            "content": {"parts": [{"text": text_query}]},
-            "outputDimensionality": 1536
+            "model": OPENROUTER_EMBEDDING_MODEL,
+            "input": text_query
         }
         try:
             req = urllib.request.Request(
@@ -43,7 +46,7 @@ def get_text_embedding(text_query: str) -> List[float]:
             )
             with urllib.request.urlopen(req, timeout=8) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["embedding"]["values"]
+                return res_data["data"][0]["embedding"]
         except Exception as e:
             print(f"Embedding error: {e}")
 
@@ -101,8 +104,8 @@ def query_vector_kb(db: Session, query: str, limit: int = 3) -> List[Dict[str, A
         ]
 
 
-def _build_gemini_request_body(prompt_text: str, context_articles: List[Dict[str, Any]]) -> dict:
-    """Build the Gemini API request body with RAG context."""
+def _build_openrouter_request_body(prompt_text: str, context_articles: List[Dict[str, Any]], stream: bool = False) -> dict:
+    """Build the OpenRouter chat completion API request body with RAG context."""
     context_str = "\n\n".join([
         f"KB Article: {art['title']}\nContent: {art['content']}"
         for art in context_articles
@@ -119,48 +122,57 @@ def _build_gemini_request_body(prompt_text: str, context_articles: List[Dict[str
 
     user_prompt = f"Knowledge Base Context:\n{context_str}\n\nUser's Question: {prompt_text}"
 
-    return {
-        "contents": [
+    body = {
+        "model": OPENROUTER_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": system_instruction
+            },
             {
                 "role": "user",
-                "parts": [{"text": user_prompt}]
+                "content": user_prompt
             }
         ],
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "generationConfig": {
-            "temperature": 0.4,
-            "maxOutputTokens": 300,
-            "topP": 0.9
-        }
+        "temperature": 0.4,
+        "max_tokens": 300,
+        "top_p": 0.9
     }
+    if stream:
+        body["stream"] = True
+    return body
 
 
 def generate_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]]) -> str:
-    """Generate a complete AI answer (non-streaming) using Gemini."""
+    """Generate a complete AI answer (non-streaming) using OpenRouter."""
     # Prompt injection guard
     malicious = ["ignore previous", "system prompt", "reveal database", "bypass safety", "jailbreak"]
     if any(hack in prompt_text.lower() for hack in malicious):
         return "⚠️ SECURITY WARNING: Suspicious pattern detected. This query has been flagged."
 
-    if GEMINI_API_KEY and GEMINI_API_KEY != "mock-key-if-no-env-present":
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-        body = _build_gemini_request_body(prompt_text, context_articles)
+    if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "mock-key-if-no-env-present":
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        body = _build_openrouter_request_body(prompt_text, context_articles, stream=False)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "VaizAI"
+        }
 
         try:
             req = urllib.request.Request(
                 url,
                 data=json.dumps(body).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 method="POST"
             )
             with urllib.request.urlopen(req, timeout=15) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["candidates"][0]["content"]["parts"][0]["text"]
+                return res_data["choices"][0]["message"]["content"]
         except Exception as e:
-            print(f"Gemini generateContent error: {e}")
-            if _is_gemini_rate_limited(e):
+            print(f"OpenRouter generateContent error: {e}")
+            if _is_rate_limited(e):
                 suggestion, matched = _build_offline_suggestion(prompt_text, context_articles)
                 if matched:
                     return f"⚠️ {RATE_LIMIT_MESSAGE}\n\nKeyword-based suggestion: {suggestion}"
@@ -171,7 +183,7 @@ def generate_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]])
 
 def stream_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]]) -> Generator[str, None, None]:
     """
-    Stream AI answer token-by-token using Gemini's streamGenerateContent API.
+    Stream AI answer token-by-token using OpenRouter's chat completions API.
     Yields Server-Sent Event (SSE) formatted strings.
     """
     # Prompt injection guard
@@ -180,15 +192,21 @@ def stream_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]]) -
         yield f"data: {json.dumps({'text': '⚠️ SECURITY WARNING: Suspicious pattern detected.', 'done': True})}\n\n"
         return
 
-    if GEMINI_API_KEY and GEMINI_API_KEY != "mock-key-if-no-env-present":
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
-        body = _build_gemini_request_body(prompt_text, context_articles)
+    if OPENROUTER_API_KEY and OPENROUTER_API_KEY != "mock-key-if-no-env-present":
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        body = _build_openrouter_request_body(prompt_text, context_articles, stream=True)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "http://localhost:8000",
+            "X-Title": "VaizAI"
+        }
 
         try:
             req = urllib.request.Request(
                 url,
                 data=json.dumps(body).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 method="POST"
             )
             with urllib.request.urlopen(req, timeout=30) as response:
@@ -201,17 +219,12 @@ def stream_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]]) -
                         break
                     try:
                         chunk = json.loads(json_str)
-                        candidates = chunk.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            for part in parts:
-                                text_chunk = part.get("text", "")
-                                if text_chunk:
-                                    yield f"data: {json.dumps({'text': text_chunk, 'done': False})}\n\n"
-                        # Check if finished
-                        finish_reason = candidates[0].get("finishReason") if candidates else None
-                        if finish_reason and finish_reason != "STOP":
-                            pass
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            text_chunk = delta.get("content", "")
+                            if text_chunk:
+                                yield f"data: {json.dumps({'text': text_chunk, 'done': False})}\n\n"
                     except json.JSONDecodeError:
                         continue
 
@@ -219,8 +232,8 @@ def stream_ai_answer(prompt_text: str, context_articles: List[Dict[str, Any]]) -
             return
 
         except Exception as e:
-            print(f"Gemini stream error: {e}")
-            if _is_gemini_rate_limited(e):
+            print(f"OpenRouter stream error: {e}")
+            if _is_rate_limited(e):
                 suggestion, matched = _build_offline_suggestion(prompt_text, context_articles)
                 offline_response = (
                     f"⚠️ {RATE_LIMIT_MESSAGE}\n\nKeyword-based suggestion: {suggestion}"

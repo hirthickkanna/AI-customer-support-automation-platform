@@ -8,7 +8,9 @@ ENV_FILE_PATH = os.path.join(BASE_DIR, ".env")
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://vaizai_admin:vaizai_secure_pass123@localhost:5432/vaizai_support"
     JWT_SECRET: str = "super_secret_vaizai_gateway_key_99881122"
-    GEMINI_API_KEY: str = "mock-key-if-no-env-present"
+    OPENROUTER_API_KEY: str = "mock-key-if-no-env-present"
+    OPENROUTER_MODEL: str = "google/gemini-2.0-flash"
+    OPENROUTER_EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
     RAZORPAY_KEY_ID: str = "rzp_test_placeholder"
     RAZORPAY_KEY_SECRET: str = "placeholder_secret"
 
