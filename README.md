@@ -52,7 +52,7 @@ graph TD
 - **Core Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.13)
 - **Database ORM**: [SQLAlchemy](https://www.sqlalchemy.org/)
 - **Database Engine**: PostgreSQL with `pgvector` (Vector database extension) or fallback SQLite database (`vaizai_support.db`)
-- **AI Processing**: Google Gemini API (`gemini-2.0-flash` & `gemini-embedding-2`)
+- **AI Processing**: Google Gemini API (`gemini-2.5-flash` & `gemini-embedding-2`)
 - **Task Scheduling**: `APScheduler` (handles daily reset for ticketing plans)
 - **JWT & Password Security**: `python-jose` (for tokens) and `passlib` with bcrypt/Argon2 (for password hashes)
 - **Payment Processing**: Razorpay Python SDK

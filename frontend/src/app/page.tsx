@@ -644,7 +644,7 @@ export default function PlatformDashboard() {
     setIsTyping(true);
 
     // Create an empty streaming bot message immediately
-    const streamingMsgId = Date.now();
+    const streamingMsgId = Date.now() * 2 + 1;
     setChatMessages(prev => [...prev, {
       id: streamingMsgId,
       sender: "bot",
@@ -733,7 +733,7 @@ export default function PlatformDashboard() {
     const msg = chatInput.trim();
     
     // Add user message to state
-    setChatMessages(prev => [...prev, { id: Date.now(), sender: "user", text: msg, citation: null }]);
+    setChatMessages(prev => [...prev, { id: Date.now() * 2, sender: "user", text: msg, citation: null }]);
     setChatInput("");
 
     // Check Prompt Injection

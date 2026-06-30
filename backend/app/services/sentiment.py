@@ -14,11 +14,9 @@ def analyze_message_sentiment(text: str) -> Dict[str, Any]:
         r"\b(thanks|thank you|great|perfect|resolved|awesome|working|fixed)\b"
     ]
     
-    # Calculate score base
     anger_score = 0.0
     text_lower = text.lower()
     
-    # Simple rule-based calculator
     for pattern in angry_patterns:
         matches = re.findall(pattern, text_lower)
         if matches:
@@ -29,10 +27,8 @@ def analyze_message_sentiment(text: str) -> Dict[str, Any]:
         if matches:
             anger_score -= 0.20 * len(matches)
             
-    # Normalize score between 0.0 and 1.0
     anger_score = max(0.0, min(1.0, 0.5 + anger_score))
     
-    # Output detailed categories
     joy_score = max(0.0, 1.0 - anger_score)
     sadness_score = 0.2 if anger_score > 0.6 else 0.1
     

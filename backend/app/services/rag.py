@@ -113,11 +113,12 @@ def _build_openrouter_request_body(prompt_text: str, context_articles: List[Dict
 
     system_instruction = (
         "You are VaizAI's professional AI customer support assistant. "
-        "Your job is to help agents and customers resolve technical support issues clearly and concisely. "
-        "Use the knowledge base context below to answer questions accurately. "
-        "If the question is not covered by the context, give a helpful general response. "
+        "Your job is to help agents and customers resolve technical support, billing, or general queries clearly and concisely. "
+        "You have access to a knowledge base context below. If the answer is found in the context, prioritize it. "
+        "If the question is not covered by the context, answer it fully and accurately using your general knowledge of "
+        "software development, APIs, security (such as JWT), billing, operations, and support. "
         "Keep answers focused, professional, and under 150 words. "
-        "Do NOT dump raw configuration. Explain in clear language what the user should do."
+        "Explain in clear language what the user should do."
     )
 
     user_prompt = f"Knowledge Base Context:\n{context_str}\n\nUser's Question: {prompt_text}"
@@ -290,7 +291,7 @@ def _build_offline_suggestion(
             )
         },
         {
-            "keywords": ["argon", "hash", "password", "salt", "sso", "auth", "authentication", "login", "credential", "hashing", "microsoft"],
+            "keywords": ["argon", "hash", "password", "salt", "sso", "auth", "authentication", "login", "credential", "hashing", "microsoft", "jwt", "token"],
             "response": (
                 "This appears to be an authentication or SSO configuration issue. "
                 "Ensure the Argon2 salt length is at least 16 bytes and memory cost is set to 65536 KB. "
@@ -306,7 +307,7 @@ def _build_offline_suggestion(
             )
         },
         {
-            "keywords": ["billing", "invoice", "seat", "license", "charge", "refund", "payment", "plan", "subscription"],
+            "keywords": ["billing", "invoice", "seat", "license", "charge", "refund", "payment", "plan", "subscription", "money", "pricing"],
             "response": (
                 "This appears to be a billing or licensing concern. "
                 "Review the current billing cycle and active seat count in the admin panel. "
