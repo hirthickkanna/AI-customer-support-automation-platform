@@ -1,6 +1,7 @@
 import datetime
 import hashlib
 import hmac
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -9,6 +10,16 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 import razorpay
 from apscheduler.schedulers.background import BackgroundScheduler
+
+
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 from app.database import get_db, init_vector_extension, Base, engine
 from app.schemas import (
